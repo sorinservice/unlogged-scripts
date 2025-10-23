@@ -98,42 +98,44 @@ local function normaliseGames(rawGames)
     return games
 end
 
-local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
-local GamesRaw, GamesOrigin = loadModule("games.lua", "SupportedGames/games.lua", REMOTE_GAMES)
+return function()
+    local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
+    local GamesRaw, GamesOrigin = loadModule("games.lua", "SupportedGames/games.lua", REMOTE_GAMES)
 
-if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
-    error("[SupportedGamesScript] Luna library missing required methods")
+    if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
+        error("[SupportedGamesScript] Luna library missing required methods")
+    end
+
+    local games = normaliseGames(GamesRaw)
+    table.sort(games, function(a, b)
+        return a.Name:lower() < b.Name:lower()
+    end)
+
+    local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
+    Luna:Intro(introText)
+
+    local window = Luna:CreateWindow({
+        Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
+        Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
+        Count = #games,
+    })
+
+    for _, entry in ipairs(games) do
+        window:AddGame(entry.Name, entry.ScriptCount or 0)
+    end
+
+    env.AurexisSupportedGamesData = {
+        Games = games,
+        Sources = {
+            Luna = LunaOrigin,
+            Games = GamesOrigin,
+        },
+        LoadedAt = os.time(),
+    }
+
+    return {
+        Library = Luna,
+        Games = games,
+        UI = window,
+    }
 end
-
-local games = normaliseGames(GamesRaw)
-table.sort(games, function(a, b)
-    return a.Name:lower() < b.Name:lower()
-end)
-
-local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
-Luna:Intro(introText)
-
-local window = Luna:CreateWindow({
-    Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
-    Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
-    Count = #games,
-})
-
-for _, entry in ipairs(games) do
-    window:AddGame(entry.Name, entry.ScriptCount or 0)
-end
-
-env.AurexisSupportedGamesData = {
-    Games = games,
-    Sources = {
-        Luna = LunaOrigin,
-        Games = GamesOrigin,
-    },
-    LoadedAt = os.time(),
-}
-
-return {
-    Library = Luna,
-    Games = games,
-    UI = window,
-}
