@@ -5,6 +5,7 @@ local games = {
     {Name = "99 Nights in the Forest", ScriptCount = 2},
     {Name = "RealisticCarDriving", ScriptCount = 1},
     {Name = "Break your Bones", ScriptCount = 1},
+    {Name = "Steal a Brainrot", ScriptCount = 3},
 }
 
 
