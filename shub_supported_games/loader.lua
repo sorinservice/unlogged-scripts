@@ -1,7 +1,7 @@
 -- Aurexis Supported Games loader (informational only)
 -- Shows a list of supported titles without bundling exploit code.
 
-local LOCAL_ROOT = "SupportedGamesScript"
+local LOCAL_ROOT = "Supported Games Script"
 
 local REMOTE_LUNA = "https://raw.githubusercontent.com/sorinservice/luna-lib-remastered/refs/heads/main/LunaLight.lua"
 local REMOTE_GAMES = "https://raw.githubusercontent.com/sorinservice/unlogged-scripts/refs/heads/main/shub_supported_games/games.lua"
