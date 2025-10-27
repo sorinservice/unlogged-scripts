@@ -10,6 +10,12 @@ local SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 local SUPABASE_GAMES_ENDPOINT = "/rest/v1/games"
 local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,thumbnail_url,is_active&is_active=eq.true&order=name.asc"
 
+local function log(...)
+    if typeof(print) == "function" then
+        print("[SupportedGamesScript]", ...)
+    end
+end
+
 local function getEnv()
     local ok, result = pcall(function()
         return (getgenv and getgenv()) or _G
@@ -78,10 +84,12 @@ local function buildSupabaseRequest()
     local query = env.AurexisSupabaseGamesQuery or SUPABASE_GAMES_QUERY
 
     if type(url) ~= "string" or url == "" then
+        log("Missing Supabase project URL")
         return nil
     end
 
     if type(key) ~= "string" or key == "" then
+        log("Missing Supabase anon key")
         return nil
     end
 
@@ -110,16 +118,22 @@ local function fetchSupabaseGames()
     local request = buildSupabaseRequest()
 
     if not httpService or typeof(httpService.JSONDecode) ~= "function" then
+        log("HttpService unavailable or JSONDecode missing")
         return nil, request and request.Url or nil, "HttpService unavailable for JSON decoding"
     end
 
     if not request then
+        log("Supabase request configuration invalid")
         return nil, nil, "Invalid Supabase configuration"
     end
+
+    log("Requesting Supabase games from:", request.Url)
 
     local headers = {
         apikey = request.Key,
         Authorization = "Bearer " .. request.Key,
+        ["Content-Type"] = "application/json",
+        Accept = "application/json",
     }
 
     local requestPayload = {
@@ -138,23 +152,28 @@ local function fetchSupabaseGames()
         local ok, response = pcall(function()
             return httpService:RequestAsync(requestPayload)
         end)
+        log("Trying HttpService.RequestAsync")
 
         if not ok or type(response) ~= "table" then
             failureReason = failureReason or ("HttpService.RequestAsync failed: " .. tostring(response))
+            log("HttpService.RequestAsync call failed:", failureReason)
             return nil
         end
 
         if response.Success ~= true then
             local code = response.StatusCode or response.Status or "unknown"
             failureReason = ("HttpService.RequestAsync returned HTTP " .. tostring(code))
+            log("HttpService.RequestAsync returned non-success:", code)
             return nil
         end
 
         if type(response.Body) ~= "string" or response.Body == "" then
             failureReason = "HttpService.RequestAsync returned empty body"
+            log("HttpService.RequestAsync returned empty body")
             return nil
         end
 
+        log("HttpService.RequestAsync succeeded, body length:", #response.Body)
         return response.Body
     end
 
@@ -195,7 +214,8 @@ local function fetchSupabaseGames()
             push(rawget(env, name))
         end
 
-        for _, candidate in ipairs(candidates) do
+        for index, candidate in ipairs(candidates) do
+            log("Trying custom request candidate", index)
             local ok, response = pcall(candidate, {
                 Url = requestPayload.Url,
                 Method = requestPayload.Method,
@@ -214,12 +234,15 @@ local function fetchSupabaseGames()
                 local body = response.Body or response.body or response.Data or response.data
 
                 if success and type(body) == "string" and body ~= "" then
+                    log("Custom request candidate", index, "succeeded, body length:", #body)
                     return body
                 else
                     failureReason = failureReason or ("Custom request failed: status=" .. tostring(response.StatusCode or response.Status or "unknown"))
+                    log("Custom request candidate", index, "failed:", failureReason)
                 end
             elseif not ok then
                 failureReason = failureReason or ("Custom request errored: " .. tostring(response))
+                log("Custom request candidate", index, "errored:", response)
             end
         end
 
@@ -228,6 +251,7 @@ local function fetchSupabaseGames()
 
     local body = tryHttpService() or tryExploitRequest()
     if not body then
+        log("All Supabase request methods failed:", failureReason or "unknown")
         return nil, request.Url, failureReason or "All request methods failed"
     end
 
@@ -236,8 +260,11 @@ local function fetchSupabaseGames()
     end)
 
     if not decodeOk or type(data) ~= "table" then
+        log("JSON decode failed:", data)
         return nil, request.Url, "JSON decode failed: " .. tostring(data)
     end
+
+    log("Supabase returned", #data, "rows")
 
     return data, request.Url, nil
 end
@@ -309,6 +336,7 @@ return function()
         if typeof(warn) == "function" then
             warn("[SupportedGamesScript] Supabase fetch failed: " .. tostring(SupabaseError or "unknown error"))
         end
+        log("Supabase fetch failed, error:", SupabaseError)
     end
 
     if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
