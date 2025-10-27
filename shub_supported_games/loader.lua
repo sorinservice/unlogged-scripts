@@ -477,10 +477,22 @@ return function()
         error("[SupportedGamesScript] Luna library missing required methods")
     end
 
-    local games = normaliseGames(GamesRaw)
-    table.sort(games, function(a, b)
-        return a.Name:lower() < b.Name:lower()
+    local normaliseOk, gamesOrError = pcall(normaliseGames, GamesRaw)
+    if not normaliseOk then
+        error("[SupportedGamesScript] Failed to normalise games: " .. tostring(gamesOrError))
+    end
+    local games = gamesOrError
+    if type(games) ~= "table" then
+        error("[SupportedGamesScript] Normalised games returned unexpected value: " .. typeof(games))
+    end
+    local sortOk, sortErr = pcall(function()
+        table.sort(games, function(a, b)
+            return a.Name:lower() < b.Name:lower()
+        end)
     end)
+    if not sortOk then
+        error("[SupportedGamesScript] Failed to sort games: " .. tostring(sortErr))
+    end
     log("Normalised", #games, "games")
 
     local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
