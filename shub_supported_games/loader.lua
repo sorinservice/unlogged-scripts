@@ -8,7 +8,7 @@ local REMOTE_LUNA = "https://raw.githubusercontent.com/sorinservice/luna-lib-rem
 local SUPABASE_PROJECT_URL = "https://udnvaneupscmrgwutamv.supabase.co"
 local SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbnZhbmV1cHNjbXJnd3V0YW12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NjEyMzAsImV4cCI6MjA3MDEzNzIzMH0.7duKofEtgRarIYDAoMfN7OEkOI_zgkG2WzAXZlxl5J0"
 local SUPABASE_GAMES_ENDPOINT = "/rest/v1/games"
-local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,thumbnail_url,updated_at,is_active&is_active=eq.true&order=name.asc"
+local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,updated_at,is_active&is_active=eq.true&order=name.asc"
 
 local function log(...)
     if typeof(print) == "function" then
@@ -336,7 +336,6 @@ local function normaliseGames(rawGames)
                 local name = entry.Name or entry.name or entry.Title or entry.title or ("Game #" .. index)
                 local scriptCount = tonumber(entry.ScriptCount or entry.script_count or entry.scripts or entry.scriptcount) or 0
                 local description = entry.Notes or entry.notes or entry.description or entry.Description
-                local thumbnail = entry.thumbnail or entry.Thumbnail or entry.thumbnail_url or entry.thumbnailUrl or entry.thumbnailURL
                 local updatedAt = entry.updated_at or entry.UpdatedAt or entry.updatedAt
                 local updatedDisplay = formatTimestamp(updatedAt)
                 table.insert(games, {
@@ -346,7 +345,6 @@ local function normaliseGames(rawGames)
                     Description = description,
                     UpdatedAt = updatedAt,
                     UpdatedAtDisplay = updatedDisplay,
-                    Thumbnail = thumbnail,
                 })
             end
         end
@@ -372,7 +370,11 @@ local function enhanceWindow(window)
             end
         end
 
-        originalConfirm(self, gameName, scriptCount)
+        local ok, err = pcall(originalConfirm, self, gameName, scriptCount)
+        if not ok then
+            log("Error in Luna confirm:", err)
+            return
+        end
 
         if typeof(self._frame) ~= "Instance" then
             return
