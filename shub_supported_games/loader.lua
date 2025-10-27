@@ -481,19 +481,24 @@ return function()
     table.sort(games, function(a, b)
         return a.Name:lower() < b.Name:lower()
     end)
+    log("Normalised", #games, "games")
 
     local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
     Luna:Intro(introText)
+    log("Intro complete")
 
     local window = Luna:CreateWindow({
         Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
         Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
         Count = #games,
     })
+    log("Window created")
 
     enhanceWindow(window)
+    log("Window enhanced")
 
     for _, entry in ipairs(games) do
+        log("Adding game:", entry.Name, entry.ScriptCount or 0)
         window:AddGame(entry.Name, entry.ScriptCount or 0)
 
         if type(window._games) == "table" then
@@ -505,6 +510,7 @@ return function()
             end
         end
     end
+    log("All games added")
 
     env.AurexisSupportedGamesData = {
         Games = games,
