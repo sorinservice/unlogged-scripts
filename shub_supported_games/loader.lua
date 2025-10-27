@@ -8,11 +8,38 @@ local REMOTE_LUNA = "https://raw.githubusercontent.com/sorinservice/luna-lib-rem
 local SUPABASE_PROJECT_URL = "https://udnvaneupscmrgwutamv.supabase.co"
 local SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbnZhbmV1cHNjbXJnd3V0YW12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NjEyMzAsImV4cCI6MjA3MDEzNzIzMH0.7duKofEtgRarIYDAoMfN7OEkOI_zgkG2WzAXZlxl5J0"
 local SUPABASE_GAMES_ENDPOINT = "/rest/v1/games"
-local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,thumbnail_url,is_active&is_active=eq.true&order=name.asc"
+local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,thumbnail_url,updated_at,is_active&is_active=eq.true&order=name.asc"
 
 local function log(...)
     if typeof(print) == "function" then
         print("[SupportedGamesScript]", ...)
+    end
+end
+
+local function formatTimestamp(value)
+    if type(value) ~= "string" or value == "" then
+        return nil
+    end
+
+    local year, month, day, hour, minute, second = value:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
+    if not year then
+        year, month, day = value:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)")
+        if not year then
+            return value
+        end
+    end
+
+    local months = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    }
+
+    local monthIndex = tonumber(month)
+    local monthLabel = monthIndex and months[monthIndex] or month
+    if hour then
+        return ("%s %s %s %s:%s"):format(day, monthLabel, year, hour, minute)
+    else
+        return ("%s %s %s"):format(day, monthLabel, year)
     end
 end
 
@@ -310,11 +337,15 @@ local function normaliseGames(rawGames)
                 local scriptCount = tonumber(entry.ScriptCount or entry.script_count or entry.scripts or entry.scriptcount) or 0
                 local description = entry.Notes or entry.notes or entry.description or entry.Description
                 local thumbnail = entry.thumbnail or entry.Thumbnail or entry.thumbnail_url or entry.thumbnailUrl or entry.thumbnailURL
+                local updatedAt = entry.updated_at or entry.UpdatedAt or entry.updatedAt
+                local updatedDisplay = formatTimestamp(updatedAt)
                 table.insert(games, {
                     Name = tostring(name),
                     ScriptCount = scriptCount,
                     Notes = description,
                     Description = description,
+                    UpdatedAt = updatedAt,
+                    UpdatedAtDisplay = updatedDisplay,
                     Thumbnail = thumbnail,
                 })
             end
@@ -358,7 +389,7 @@ return function()
     })
 
     for _, entry in ipairs(games) do
-        window:AddGame(entry.Name, entry.ScriptCount or 0)
+        window:AddGame(entry.Name, entry.ScriptCount or 0, entry.UpdatedAtDisplay, entry.Description)
     end
 
     env.AurexisSupportedGamesData = {
