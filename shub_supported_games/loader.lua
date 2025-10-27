@@ -355,6 +355,107 @@ local function normaliseGames(rawGames)
     return games
 end
 
+local function enhanceWindow(window)
+    if type(window) ~= "table" or type(window._confirm) ~= "function" or window.__AurexisEnhanced then
+        return
+    end
+
+    window.__AurexisEnhanced = true
+
+    local originalConfirm = window._confirm
+
+    window._confirm = function(self, gameName, scriptCount)
+        local before = {}
+        if typeof(self._frame) == "Instance" then
+            for _, child in ipairs(self._frame:GetChildren()) do
+                before[child] = true
+            end
+        end
+
+        originalConfirm(self, gameName, scriptCount)
+
+        if typeof(self._frame) ~= "Instance" then
+            return
+        end
+
+        local modal
+        for _, child in ipairs(self._frame:GetChildren()) do
+            if not before[child] and child:IsA("Frame") then
+                modal = child
+                break
+            end
+        end
+
+        if not modal then
+            return
+        end
+
+        local metadata
+        if type(self._games) == "table" then
+            for _, record in ipairs(self._games) do
+                if type(record) == "table" and record.Name == gameName then
+                    metadata = record
+                    break
+                end
+            end
+        end
+
+        if not metadata then
+            return
+        end
+
+        local box
+        for _, child in ipairs(modal:GetChildren()) do
+            if child:IsA("Frame") then
+                box = child
+                break
+            end
+        end
+
+        if not box then
+            return
+        end
+
+        local label
+        for _, child in ipairs(box:GetChildren()) do
+            if child:IsA("TextLabel") then
+                label = child
+                break
+            end
+        end
+
+        if not label then
+            return
+        end
+
+        local lines = {
+            tostring(metadata.Name or gameName),
+            "Scripts available: " .. tostring(metadata.ScriptCount or scriptCount or 0),
+        }
+
+        if type(metadata.UpdatedAtDisplay) == "string" and metadata.UpdatedAtDisplay ~= "" then
+            table.insert(lines, "Last updated: " .. metadata.UpdatedAtDisplay)
+        end
+
+        if type(metadata.Description) == "string" and metadata.Description ~= "" then
+            table.insert(lines, "Description:\n" .. metadata.Description)
+        end
+
+        label.Text = table.concat(lines, "\n\n")
+
+        local extraHeight = 0
+        if type(metadata.Description) == "string" and metadata.Description ~= "" then
+            extraHeight = extraHeight + 40
+        end
+        if type(metadata.UpdatedAtDisplay) == "string" and metadata.UpdatedAtDisplay ~= "" then
+            extraHeight = extraHeight + 20
+        end
+
+        label.Size = UDim2.new(1, -20, 0, 110 + extraHeight)
+        box.Size = UDim2.new(0, 320, 0, 150 + extraHeight)
+    end
+end
+
 return function()
     local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
 
@@ -388,8 +489,19 @@ return function()
         Count = #games,
     })
 
+    enhanceWindow(window)
+
     for _, entry in ipairs(games) do
-        window:AddGame(entry.Name, entry.ScriptCount or 0, entry.UpdatedAtDisplay, entry.Description)
+        window:AddGame(entry.Name, entry.ScriptCount or 0)
+
+        if type(window._games) == "table" then
+            local record = window._games[#window._games]
+            if type(record) == "table" then
+                record.ScriptCount = entry.ScriptCount or 0
+                record.UpdatedAtDisplay = entry.UpdatedAtDisplay
+                record.Description = entry.Description
+            end
+        end
     end
 
     env.AurexisSupportedGamesData = {
