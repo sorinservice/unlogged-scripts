@@ -459,106 +459,120 @@ local function enhanceWindow(window)
 end
 
 return function()
-    local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
+    local function core()
+        local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
 
-    local GamesRaw, SupabaseUrl, SupabaseError = fetchSupabaseGames()
-    local GamesOrigin = "supabase"
+        local GamesRaw, SupabaseUrl, SupabaseError = fetchSupabaseGames()
+        local GamesOrigin = "supabase"
 
-    if type(GamesRaw) ~= "table" then
-        GamesRaw = {}
-        GamesOrigin = "supabase:error"
-        if typeof(warn) == "function" then
-            warn("[SupportedGamesScript] Supabase fetch failed: " .. tostring(SupabaseError or "unknown error"))
-        end
-        log("Supabase fetch failed, error:", SupabaseError)
-    end
-
-    if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
-        error("[SupportedGamesScript] Luna library missing required methods")
-    end
-
-    local normaliseOk, gamesOrError = pcall(normaliseGames, GamesRaw)
-    if not normaliseOk then
-        error("[SupportedGamesScript] Failed to normalise games: " .. tostring(gamesOrError))
-    end
-    local games = gamesOrError
-    if type(games) ~= "table" then
-        error("[SupportedGamesScript] Normalised games returned unexpected value: " .. typeof(games))
-    end
-    local sortOk, sortErr = pcall(function()
-        table.sort(games, function(a, b)
-            return a.Name:lower() < b.Name:lower()
-        end)
-    end)
-    if not sortOk then
-        error("[SupportedGamesScript] Failed to sort games: " .. tostring(sortErr))
-    end
-    log("Normalised", #games, "games")
-
-    local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
-    local introOk, introErr = pcall(function()
-        Luna:Intro(introText)
-    end)
-    if not introOk then
-        error("[SupportedGamesScript] Luna intro failed: " .. tostring(introErr))
-    end
-    log("Intro complete")
-
-    local windowResult
-    local windowOk, windowErr = pcall(function()
-        windowResult = Luna:CreateWindow({
-            Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
-            Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
-            Count = #games,
-        })
-    end)
-    if not windowOk then
-        error("[SupportedGamesScript] Luna window creation failed: " .. tostring(windowErr))
-    end
-
-    local window = windowResult
-    if type(window) ~= "table" then
-        error("[SupportedGamesScript] Luna window returned unexpected value: " .. typeof(window))
-    end
-    log("Window created")
-
-    enhanceWindow(window)
-    log("Window enhanced")
-
-    for _, entry in ipairs(games) do
-        log("Adding game:", entry.Name, entry.ScriptCount or 0)
-        local addOk, addErr = pcall(function()
-            window:AddGame(entry.Name, entry.ScriptCount or 0)
-        end)
-        if not addOk then
-            error(("[SupportedGamesScript] Failed to add game '%s': %s"):format(entry.Name, tostring(addErr)))
+        if type(GamesRaw) ~= "table" then
+            GamesRaw = {}
+            GamesOrigin = "supabase:error"
+            if typeof(warn) == "function" then
+                warn("[SupportedGamesScript] Supabase fetch failed: " .. tostring(SupabaseError or "unknown error"))
+            end
+            log("Supabase fetch failed, error:", SupabaseError)
         end
 
-        if type(window._games) == "table" then
-            local record = window._games[#window._games]
-            if type(record) == "table" then
-                record.ScriptCount = entry.ScriptCount or 0
-                record.UpdatedAtDisplay = entry.UpdatedAtDisplay
-                record.Description = entry.Description
+        if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
+            error("[SupportedGamesScript] Luna library missing required methods")
+        end
+
+        local normaliseOk, gamesOrError = pcall(normaliseGames, GamesRaw)
+        if not normaliseOk then
+            error("[SupportedGamesScript] Failed to normalise games: " .. tostring(gamesOrError))
+        end
+        local games = gamesOrError
+        if type(games) ~= "table" then
+            error("[SupportedGamesScript] Normalised games returned unexpected value: " .. typeof(games))
+        end
+        local sortOk, sortErr = pcall(function()
+            table.sort(games, function(a, b)
+                return a.Name:lower() < b.Name:lower()
+            end)
+        end)
+        if not sortOk then
+            error("[SupportedGamesScript] Failed to sort games: " .. tostring(sortErr))
+        end
+        log("Normalised", #games, "games")
+
+        local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
+        local introOk, introErr = pcall(function()
+            Luna:Intro(introText)
+        end)
+        if not introOk then
+            error("[SupportedGamesScript] Luna intro failed: " .. tostring(introErr))
+        end
+        log("Intro complete")
+
+        local windowResult
+        local windowOk, windowErr = pcall(function()
+            windowResult = Luna:CreateWindow({
+                Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
+                Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
+                Count = #games,
+            })
+        end)
+        if not windowOk then
+            error("[SupportedGamesScript] Luna window creation failed: " .. tostring(windowErr))
+        end
+
+        local window = windowResult
+        if type(window) ~= "table" then
+            error("[SupportedGamesScript] Luna window returned unexpected value: " .. typeof(window))
+        end
+        log("Window created")
+
+        enhanceWindow(window)
+        log("Window enhanced")
+
+        for _, entry in ipairs(games) do
+            log("Adding game:", entry.Name, entry.ScriptCount or 0)
+            local addOk, addErr = pcall(function()
+                window:AddGame(entry.Name, entry.ScriptCount or 0)
+            end)
+            if not addOk then
+                error(("[SupportedGamesScript] Failed to add game '%s': %s"):format(entry.Name, tostring(addErr)))
+            end
+
+            if type(window._games) == "table" then
+                local record = window._games[#window._games]
+                if type(record) == "table" then
+                    record.ScriptCount = entry.ScriptCount or 0
+                    record.UpdatedAtDisplay = entry.UpdatedAtDisplay
+                    record.Description = entry.Description
+                end
             end
         end
+        log("All games added")
+
+        env.AurexisSupportedGamesData = {
+            Games = games,
+            Sources = {
+                Luna = LunaOrigin,
+                Games = GamesOrigin,
+                SupabaseUrl = SupabaseUrl,
+                SupabaseError = SupabaseError,
+            },
+            LoadedAt = os.time(),
+        }
+
+        return {
+            Library = Luna,
+            Games = games,
+            UI = window,
+        }
     end
-    log("All games added")
 
-    env.AurexisSupportedGamesData = {
-        Games = games,
-        Sources = {
-            Luna = LunaOrigin,
-            Games = GamesOrigin,
-            SupabaseUrl = SupabaseUrl,
-            SupabaseError = SupabaseError,
-        },
-        LoadedAt = os.time(),
-    }
+    local ok, result = pcall(core)
+    if not ok then
+        env.AurexisSupportedGamesLastError = result
+        if typeof(warn) == "function" then
+            warn("[SupportedGamesScript] Loader failed: " .. tostring(result))
+        end
+        error(result)
+    end
 
-    return {
-        Library = Luna,
-        Games = games,
-        UI = window,
-    }
+    env.AurexisSupportedGamesLastError = nil
+    return result
 end
