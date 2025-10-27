@@ -1006,7 +1006,7 @@ return function()
         local windowOk, windowErr = pcall(function()
             windowResult = Luna:CreateWindow({
                 Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
-                Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
+                Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v2",
                 Count = #games,
             })
         end)
