@@ -486,11 +486,7 @@ local SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 local SUPABASE_GAMES_ENDPOINT = "/rest/v1/games"
 local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,updated_at,is_active&is_active=eq.true&order=name.asc"
 
-local function log(...)
-    if typeof(print) == "function" then
-        print("[SupportedGamesScript]", ...)
-    end
-end
+local function log() end
 
 local function formatTimestamp(value)
     if type(value) ~= "string" or value == "" then
@@ -587,12 +583,10 @@ local function buildSupabaseRequest()
     local query = env.AurexisSupabaseGamesQuery or SUPABASE_GAMES_QUERY
 
     if type(url) ~= "string" or url == "" then
-        log("Missing Supabase project URL")
         return nil
     end
 
     if type(key) ~= "string" or key == "" then
-        log("Missing Supabase anon key")
         return nil
     end
 
@@ -621,16 +615,12 @@ local function fetchSupabaseGames()
     local request = buildSupabaseRequest()
 
     if not httpService or typeof(httpService.JSONDecode) ~= "function" then
-        log("HttpService unavailable or JSONDecode missing")
         return nil, request and request.Url or nil, "HttpService unavailable for JSON decoding"
     end
 
     if not request then
-        log("Supabase request configuration invalid")
         return nil, nil, "Invalid Supabase configuration"
     end
-
-    log("Requesting Supabase games from:", request.Url)
 
     local headers = {
         apikey = request.Key,
@@ -655,28 +645,23 @@ local function fetchSupabaseGames()
         local ok, response = pcall(function()
             return httpService:RequestAsync(requestPayload)
         end)
-        log("Trying HttpService.RequestAsync")
 
         if not ok or type(response) ~= "table" then
             failureReason = failureReason or ("HttpService.RequestAsync failed: " .. tostring(response))
-            log("HttpService.RequestAsync call failed:", failureReason)
             return nil
         end
 
         if response.Success ~= true then
             local code = response.StatusCode or response.Status or "unknown"
             failureReason = ("HttpService.RequestAsync returned HTTP " .. tostring(code))
-            log("HttpService.RequestAsync returned non-success:", code)
             return nil
         end
 
         if type(response.Body) ~= "string" or response.Body == "" then
             failureReason = "HttpService.RequestAsync returned empty body"
-            log("HttpService.RequestAsync returned empty body")
             return nil
         end
 
-        log("HttpService.RequestAsync succeeded, body length:", #response.Body)
         return response.Body
     end
 
@@ -718,7 +703,6 @@ local function fetchSupabaseGames()
         end
 
         for index, candidate in ipairs(candidates) do
-            log("Trying custom request candidate", index)
             local ok, response = pcall(candidate, {
                 Url = requestPayload.Url,
                 Method = requestPayload.Method,
@@ -737,15 +721,12 @@ local function fetchSupabaseGames()
                 local body = response.Body or response.body or response.Data or response.data
 
                 if success and type(body) == "string" and body ~= "" then
-                    log("Custom request candidate", index, "succeeded, body length:", #body)
                     return body
                 else
                     failureReason = failureReason or ("Custom request failed: status=" .. tostring(response.StatusCode or response.Status or "unknown"))
-                    log("Custom request candidate", index, "failed:", failureReason)
                 end
             elseif not ok then
                 failureReason = failureReason or ("Custom request errored: " .. tostring(response))
-                log("Custom request candidate", index, "errored:", response)
             end
         end
 
@@ -754,7 +735,6 @@ local function fetchSupabaseGames()
 
     local body = tryHttpService() or tryExploitRequest()
     if not body then
-        log("All Supabase request methods failed:", failureReason or "unknown")
         return nil, request.Url, failureReason or "All request methods failed"
     end
 
@@ -763,11 +743,8 @@ local function fetchSupabaseGames()
     end)
 
     if not decodeOk or type(data) ~= "table" then
-        log("JSON decode failed:", data)
         return nil, request.Url, "JSON decode failed: " .. tostring(data)
     end
-
-    log("Supabase returned", #data, "rows")
 
     return data, request.Url, nil
 end
@@ -887,7 +864,6 @@ local function enhanceWindow(window)
 
         local ok, err = pcall(originalConfirm, self, gameName, scriptCount)
         if not ok then
-            log("Error in Luna confirm:", err)
             return
         end
 
@@ -934,14 +910,16 @@ local function enhanceWindow(window)
         end
 
         local label
+        local closeBtn
         for _, child in ipairs(box:GetChildren()) do
-            if child:IsA("TextLabel") then
+            if child:IsA("TextLabel") and not label then
                 label = child
-                break
+            elseif child:IsA("TextButton") and not closeBtn then
+                closeBtn = child
             end
         end
 
-        if not label then
+        if not label or not closeBtn then
             return
         end
 
@@ -960,16 +938,23 @@ local function enhanceWindow(window)
 
         label.Text = table.concat(lines, "\n\n")
 
-        local extraHeight = 0
-        if type(metadata.Description) == "string" and metadata.Description ~= "" then
-            extraHeight = extraHeight + 40
-        end
-        if type(metadata.UpdatedAtDisplay) == "string" and metadata.UpdatedAtDisplay ~= "" then
-            extraHeight = extraHeight + 20
+        local function adjust()
+            local labelHeight = math.max(60, label.TextBounds.Y)
+            label.Size = UDim2.new(1, -20, 0, labelHeight)
+
+            local topPadding = 12
+            local spacing = 12
+            local buttonHeight = closeBtn.Size.Y.Offset > 0 and closeBtn.Size.Y.Offset or 34
+            local buttonOffset = topPadding + labelHeight + spacing
+
+            closeBtn.Position = UDim2.new(0, 10, 0, buttonOffset)
+
+            local finalHeight = buttonOffset + buttonHeight + 12
+            box.Size = UDim2.new(0, 320, 0, math.max(150, finalHeight))
         end
 
-        label.Size = UDim2.new(1, -20, 0, 110 + extraHeight)
-        box.Size = UDim2.new(0, 320, 0, 150 + extraHeight)
+        adjust()
+        task.delay(0.2, adjust)
     end
 end
 
@@ -986,7 +971,6 @@ return function()
             if typeof(warn) == "function" then
                 warn("[SupportedGamesScript] Supabase fetch failed: " .. tostring(SupabaseError or "unknown error"))
             end
-            log("Supabase fetch failed, error:", SupabaseError)
         end
 
         if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
@@ -1009,7 +993,6 @@ return function()
         if not sortOk then
             error("[SupportedGamesScript] Failed to sort games: " .. tostring(sortErr))
         end
-        log("Normalised", #games, "games")
 
         local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
         local introOk, introErr = pcall(function()
@@ -1018,7 +1001,6 @@ return function()
         if not introOk then
             error("[SupportedGamesScript] Luna intro failed: " .. tostring(introErr))
         end
-        log("Intro complete")
 
         local windowResult
         local windowOk, windowErr = pcall(function()
@@ -1036,13 +1018,9 @@ return function()
         if type(window) ~= "table" then
             error("[SupportedGamesScript] Luna window returned unexpected value: " .. typeof(window))
         end
-        log("Window created")
-
         enhanceWindow(window)
-        log("Window enhanced")
 
         for _, entry in ipairs(games) do
-            log("Adding game:", entry.Name, entry.ScriptCount or 0)
             local addOk, addErr = pcall(function()
                 window:AddGame(entry.Name, entry.ScriptCount or 0)
             end)
@@ -1059,9 +1037,8 @@ return function()
                 end
             end
         end
-        log("All games added")
 
-        env.AurexisSupportedGamesData = {
+    env.AurexisSupportedGamesData = {
             Games = games,
             Sources = {
                 Luna = LunaOrigin,
