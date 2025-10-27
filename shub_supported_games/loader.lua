@@ -109,38 +109,137 @@ local function fetchSupabaseGames()
     local httpService = getHttpService()
     local request = buildSupabaseRequest()
 
-    if not httpService or typeof(httpService.RequestAsync) ~= "function" or typeof(httpService.JSONDecode) ~= "function" then
-        return nil, request and request.Url or nil
+    if not httpService or typeof(httpService.JSONDecode) ~= "function" then
+        return nil, request and request.Url or nil, "HttpService unavailable for JSON decoding"
     end
 
     if not request then
-        return nil, nil
+        return nil, nil, "Invalid Supabase configuration"
     end
 
-    local ok, response = pcall(function()
-        return httpService:RequestAsync({
-            Url = request.Url,
-            Method = "GET",
-            Headers = {
-                apikey = request.Key,
-                Authorization = "Bearer " .. request.Key,
-            },
-        })
-    end)
+    local headers = {
+        apikey = request.Key,
+        Authorization = "Bearer " .. request.Key,
+    }
 
-    if not ok or type(response) ~= "table" or response.Success ~= true or type(response.Body) ~= "string" then
-        return nil, request.Url
+    local requestPayload = {
+        Url = request.Url,
+        Method = "GET",
+        Headers = headers,
+    }
+
+    local failureReason
+
+    local function tryHttpService()
+        if typeof(httpService.RequestAsync) ~= "function" then
+            return nil
+        end
+
+        local ok, response = pcall(function()
+            return httpService:RequestAsync(requestPayload)
+        end)
+
+        if not ok or type(response) ~= "table" then
+            failureReason = failureReason or ("HttpService.RequestAsync failed: " .. tostring(response))
+            return nil
+        end
+
+        if response.Success ~= true then
+            local code = response.StatusCode or response.Status or "unknown"
+            failureReason = ("HttpService.RequestAsync returned HTTP " .. tostring(code))
+            return nil
+        end
+
+        if type(response.Body) ~= "string" or response.Body == "" then
+            failureReason = "HttpService.RequestAsync returned empty body"
+            return nil
+        end
+
+        return response.Body
+    end
+
+    local function coerceRequester(candidate)
+        if type(candidate) == "function" then
+            return candidate
+        end
+
+        if type(candidate) == "table" then
+            local inner = candidate.request or candidate.Request or candidate.http_request or candidate.HttpRequest
+            if type(inner) == "function" then
+                return inner
+            end
+        end
+
+        return nil
+    end
+
+    local function tryExploitRequest()
+        local candidates = {}
+
+        local function push(value)
+            local fn = coerceRequester(value)
+            if fn then
+                table.insert(candidates, fn)
+            end
+        end
+
+        push(env.AurexisSupabaseRequest)
+        push(rawget(env, "http_request"))
+        push(rawget(env, "request"))
+        push(rawget(env, "HttpRequest"))
+        push(rawget(env, "PerformHttpRequest"))
+        push(rawget(env, "HttpPost"))
+
+        local compoundNames = { "syn", "http", "fluxus", "krnl", "wrm", "oxygen", "Delta" }
+        for _, name in ipairs(compoundNames) do
+            push(rawget(env, name))
+        end
+
+        for _, candidate in ipairs(candidates) do
+            local ok, response = pcall(candidate, {
+                Url = requestPayload.Url,
+                Method = requestPayload.Method,
+                Headers = requestPayload.Headers,
+            })
+
+            if ok and type(response) == "table" then
+                local success = response.Success
+                if success == nil then
+                    local status = response.StatusCode or response.Status or response.status
+                    if tonumber(status) then
+                        success = tonumber(status) >= 200 and tonumber(status) < 300
+                    end
+                end
+
+                local body = response.Body or response.body or response.Data or response.data
+
+                if success and type(body) == "string" and body ~= "" then
+                    return body
+                else
+                    failureReason = failureReason or ("Custom request failed: status=" .. tostring(response.StatusCode or response.Status or "unknown"))
+                end
+            elseif not ok then
+                failureReason = failureReason or ("Custom request errored: " .. tostring(response))
+            end
+        end
+
+        return nil
+    end
+
+    local body = tryHttpService() or tryExploitRequest()
+    if not body then
+        return nil, request.Url, failureReason or "All request methods failed"
     end
 
     local decodeOk, data = pcall(function()
-        return httpService:JSONDecode(response.Body)
+        return httpService:JSONDecode(body)
     end)
 
     if not decodeOk or type(data) ~= "table" then
-        return nil, request.Url
+        return nil, request.Url, "JSON decode failed: " .. tostring(data)
     end
 
-    return data, request.Url
+    return data, request.Url, nil
 end
 
 local function loadModule(label, localPath, remoteUrl)
@@ -201,11 +300,15 @@ end
 return function()
     local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
 
-    local GamesRaw, SupabaseUrl = fetchSupabaseGames()
+    local GamesRaw, SupabaseUrl, SupabaseError = fetchSupabaseGames()
     local GamesOrigin = "supabase"
 
     if type(GamesRaw) ~= "table" then
-        error(("[SupportedGamesScript] Failed to fetch games from Supabase (url: %s)"):format(tostring(SupabaseUrl or "unknown")))
+        GamesRaw = {}
+        GamesOrigin = "supabase:error"
+        if typeof(warn) == "function" then
+            warn("[SupportedGamesScript] Supabase fetch failed: " .. tostring(SupabaseError or "unknown error"))
+        end
     end
 
     if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
@@ -236,6 +339,7 @@ return function()
             Luna = LunaOrigin,
             Games = GamesOrigin,
             SupabaseUrl = SupabaseUrl,
+            SupabaseError = SupabaseError,
         },
         LoadedAt = os.time(),
     }
