@@ -484,14 +484,30 @@ return function()
     log("Normalised", #games, "games")
 
     local introText = env.AurexisSupportedGamesIntroText or "Loading Aurexis Supported Games..."
-    Luna:Intro(introText)
+    local introOk, introErr = pcall(function()
+        Luna:Intro(introText)
+    end)
+    if not introOk then
+        error("[SupportedGamesScript] Luna intro failed: " .. tostring(introErr))
+    end
     log("Intro complete")
 
-    local window = Luna:CreateWindow({
-        Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
-        Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
-        Count = #games,
-    })
+    local windowResult
+    local windowOk, windowErr = pcall(function()
+        windowResult = Luna:CreateWindow({
+            Title = env.AurexisSupportedGamesWindowTitle or "Supported Games",
+            Subtitle = env.AurexisSupportedGamesWindowSubtitle or "Sorin Loader v1.1",
+            Count = #games,
+        })
+    end)
+    if not windowOk then
+        error("[SupportedGamesScript] Luna window creation failed: " .. tostring(windowErr))
+    end
+
+    local window = windowResult
+    if type(window) ~= "table" then
+        error("[SupportedGamesScript] Luna window returned unexpected value: " .. typeof(window))
+    end
     log("Window created")
 
     enhanceWindow(window)
@@ -499,7 +515,12 @@ return function()
 
     for _, entry in ipairs(games) do
         log("Adding game:", entry.Name, entry.ScriptCount or 0)
-        window:AddGame(entry.Name, entry.ScriptCount or 0)
+        local addOk, addErr = pcall(function()
+            window:AddGame(entry.Name, entry.ScriptCount or 0)
+        end)
+        if not addOk then
+            error(("[SupportedGamesScript] Failed to add game '%s': %s"):format(entry.Name, tostring(addErr)))
+        end
 
         if type(window._games) == "table" then
             local record = window._games[#window._games]
