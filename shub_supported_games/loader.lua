@@ -4,12 +4,11 @@
 local LOCAL_ROOT = "Supported Games Script"
 
 local REMOTE_LUNA = "https://raw.githubusercontent.com/sorinservice/luna-lib-remastered/refs/heads/main/LunaLight.lua"
-local REMOTE_GAMES = "https://raw.githubusercontent.com/sorinservice/unlogged-scripts/refs/heads/main/shub_supported_games/games.lua"
 
 local SUPABASE_PROJECT_URL = "https://udnvaneupscmrgwutamv.supabase.co"
 local SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbnZhbmV1cHNjbXJnd3V0YW12Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ1NjEyMzAsImV4cCI6MjA3MDEzNzIzMH0.7duKofEtgRarIYDAoMfN7OEkOI_zgkG2WzAXZlxl5J0"
 local SUPABASE_GAMES_ENDPOINT = "/rest/v1/games"
-local SUPABASE_GAMES_QUERY = "?select=name,script_count,notes,is_active&is_active=eq.true&order=name.asc"
+local SUPABASE_GAMES_QUERY = "?select=name,script_count,description,thumbnail_url,is_active&is_active=eq.true&order=name.asc"
 
 local function getEnv()
     local ok, result = pcall(function()
@@ -183,10 +182,14 @@ local function normaliseGames(rawGames)
             else
                 local name = entry.Name or entry.name or entry.Title or entry.title or ("Game #" .. index)
                 local scriptCount = tonumber(entry.ScriptCount or entry.script_count or entry.scripts or entry.scriptcount) or 0
+                local description = entry.Notes or entry.notes or entry.description or entry.Description
+                local thumbnail = entry.thumbnail or entry.Thumbnail or entry.thumbnail_url or entry.thumbnailUrl or entry.thumbnailURL
                 table.insert(games, {
                     Name = tostring(name),
                     ScriptCount = scriptCount,
-                    Notes = entry.Notes or entry.notes or entry.description,
+                    Notes = description,
+                    Description = description,
+                    Thumbnail = thumbnail,
                 })
             end
         end
@@ -198,17 +201,11 @@ end
 return function()
     local Luna, LunaOrigin = loadModule("LunaLight.lua", "LunaLight.lua", REMOTE_LUNA)
 
-    local GamesRaw, GamesOrigin
-    local SupabaseUrl
+    local GamesRaw, SupabaseUrl = fetchSupabaseGames()
+    local GamesOrigin = "supabase"
 
-    local SupabaseRaw, SupabaseSource = fetchSupabaseGames()
-    if type(SupabaseRaw) == "table" and #SupabaseRaw > 0 then
-        GamesRaw = SupabaseRaw
-        GamesOrigin = "supabase"
-        SupabaseUrl = SupabaseSource
-    else
-        GamesRaw, GamesOrigin = loadModule("games.lua", "SupportedGames/games.lua", REMOTE_GAMES)
-        SupabaseUrl = SupabaseSource
+    if type(GamesRaw) ~= "table" then
+        error(("[SupportedGamesScript] Failed to fetch games from Supabase (url: %s)"):format(tostring(SupabaseUrl or "unknown")))
     end
 
     if type(Luna) ~= "table" or type(Luna.Intro) ~= "function" or type(Luna.CreateWindow) ~= "function" then
